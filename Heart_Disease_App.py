@@ -1,0 +1,177 @@
+# 1. Import Necessary Libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import gradio as gr
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_curve, roc_auc_score
+
+# 2. Loading The Dataset
+data = pd.read_csv("heart.csv")
+print(data)
+print("Dataset Loaded Successfully")
+
+# 3. Display All Basics Information
+data.info()
+data.shape
+data.head()
+data.tail()
+data.describe()
+
+# 4. Feature & Target Split
+X = data.drop("target", axis=1)
+y = data["target"]
+X
+y
+
+# 5. Train-Test Split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+print("Training set shape:", X_train.shape)
+print("Testing set shape:", X_test.shape)
+
+# 6. Feature Scaling
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# 7. Train Classification Model
+model = LogisticRegression(max_iter=1000)
+model.fit(X_train, y_train)
+
+# 9. Model Evaluation
+y_pred = model.predict(X_test)
+y_prob = model.predict_proba(X_test)[:, 1]
+
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print("\nClassification Report:\n", classification_report(y_test, y_pred))
+
+# 10. Visualization
+# 10.1 Confusion Matrix (Model Performance)
+cm = confusion_matrix(y_test, y_pred)
+plt.figure()
+sns.heatmap(cm, annot=True, fmt="d", color="red")
+plt.xlabel("Predicted label")
+plt.ylabel("Actual label")
+plt.title("Confusion Matrix - Heart Disease Prediction")
+plt.show()
+
+# 10.2 Class Distribution (Dataset Understanding)
+plt.figure()
+sns.countplot(x=y, palette = 'viridis')
+plt.xlabel("Heart Disease (0 = No, 1 = Yes)")
+plt.ylabel("Count")
+plt.title("Class Distribution Of Heart Disease Dataset")
+plt.show()
+
+# 10.3 ROC Curve (Classifier Quality)
+fpr, tpr, _ = roc_curve(y_test, y_prob)
+auc = roc_auc_score(y_test, y_prob)
+plt.figure()
+plt.plot(fpr, tpr, label=f"AUC = {auc:.2f}")
+plt.plot([0, 1], [0, 1], linestyle="--")
+plt.xlabel("False Position Rate")
+plt.ylabel("True Position Rate")
+plt.title("ROC Curve - Heart Disease Classifier")
+plt.legend()
+plt.show()
+
+# 10.4 Feature Importance (Random Forest)
+rf = RandomForestClassifier(random_state=42)
+rf.fit(X_train, y_train)
+importances = rf.feature_importances_
+features =X.columns
+importance_df = pd.DataFrame({
+    "Feature": features,
+    "Importance": importances
+}).sort_values(by="Importance", ascending=False)
+plt.figure(figsize=(8, 5))
+sns.barplot(x="Importance", y="Feature", data=importance_df, palette = "plasma")
+plt.title("Feature Importance - Heart Disease Prediction")
+plt.show()
+
+# 10.5 Probability Distribution (Model Confidence)
+plt.figure()
+sns.histplot(y_prob, bins=20, kde=True, color = 'green')
+plt.xlabel("Predicted Probability of Heart Disease")
+plt.ylabel("Frequency")
+plt.title("Prediction Probability Distribution")
+plt.show()
+
+# 11. Gradio Prediction Function
+def predict_heart_disease(
+    age, sex, cp, trestbps, chol, fbs,
+    restecg, thalach, exang, oldpeak,
+    slope, ca, thal
+):
+    input_data = np.array([[age, sex, cp, trestbps, chol, fbs,
+                           restecg, thalach, exang, oldpeak,
+                           slope, ca, thal]])
+    
+    input_scaled = scaler.transform(input_data)
+    
+    prediction = model.predict(input_scaled)[0]
+    probability = model.predict_proba(input_scaled)[0][1]
+    
+    status = "Heart Disease Detected" if prediction == 1 else "No Heart Disease Detected"
+    
+    return status, f"{probability:.2%}"
+
+# 12. Advanced Gradio UI (Tabs + Layout)
+with gr.Blocks(theme=gr.themes.Soft()) as app:
+    
+    gr.Markdown("""
+    # Heart Disease Prediction System
+    **Machine Learning Classification Application**
+    Predicts the likelihood of heart disease based on medical measurements.
+    """)
+    
+    with gr.Tab("Prediction"):
+        with gr.Row():
+            with gr.Column():
+                age = gr.Slider(20, 80, label="Age")
+                sex = gr.Radio([0, 1], label="Sex (0 = Female, 1 = Male)")
+                cp = gr.Dropdown([0, 1, 2, 3], label="Chest Pain Type")
+                trestbps = gr.Slider(80, 200, label="Resting Blood Pressure")
+                chol = gr.Slider(100, 600, label="Cholesterol")
+                fbs = gr.Radio([0, 1], label="Fasting Blood Sugar > 120")
+                
+            with gr.Column():
+                restecg = gr.Dropdown([0, 1, 2], label="Resting ECG")
+                thalach = gr.Slider(60, 220, label="Max Heart Rate")
+                exang = gr.Radio([0, 1], label="Exercise Induced Angina")
+                oldpeak = gr.Slider(0, 6, step=0.1, label="Oldpeak (ST Depression")
+                slope = gr.Dropdown([0, 1, 2], label="Slope of ST Segment")
+                ca = gr.Dropdown([0, 1, 2, 3, 4], label="Major Vessels")
+                thal = gr.Dropdown([0, 1, 2, 3], label="Thalassmia")
+                
+        predict_btn = gr.Button("Predict Risk", variant="primary")
+        
+        with gr.Row():
+            prediction_output = gr.Textbox(label="Prediction Results")
+            probability_output =  gr.Textbox(label="Risk Probability")
+            
+        predict_btn.click(
+            predict_heart_disease,
+            inputs=[age, sex, cp, trestbps, chol, fbs,
+                   restecg, thalach, exang, oldpeak,
+                   slope, ca, thal],
+            outputs=[prediction_output, probability_output]
+        )
+        
+    with gr.Tab("About the model"):
+        gr.Markdown("""
+        ### Model Information
+        - **Problem Type:** Classification
+        - **Algorithm:** Logistic Regression
+        - **Evaluation Metrics:** Accuracy, Precision, Recall, F1-score, ROC-AUC
+        - **Dataset:** Heart Disease UCI
+        
+        ### Disclaimer
+        This tool is for **educational purposes only** and does not replace professional medical advice.
+        """)
+
+app.launch()
