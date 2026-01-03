@@ -32,4 +32,4 @@ Module: Machine Learning
 
 Program: BSc (Hons) Creative Computing
 
-Institution: Academic Center RAK, UAE
+Institution: Academic Center Bath Spa University RAK, UAE
